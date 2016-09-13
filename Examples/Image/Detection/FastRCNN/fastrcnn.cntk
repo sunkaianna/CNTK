@@ -1,3 +1,6 @@
+# Fast-RCNN configuration for CNTK
+# For algorithm and details see http://arxiv.org/abs/1504.08083
+
 command=Train:Test
 #command=Write
 
@@ -40,8 +43,6 @@ Train = {
         convLayers  = BS.Network.CloneFunction(network.pool1, network.conv5_y)
         fcLayers    = BS.Network.CloneFunction(network.pool3, network.h2_d)
 
-        # LinearLayer does not work since it reduces to [21 x *] instead of [21 x 64 x *]
-        # z = LinearLayer {21} (fcOut)
         model (features, rois) = {
             featNorm = features - Constant (114)
             pool1Out = pool1 (featNorm)
@@ -72,7 +73,7 @@ Train = {
     SGD = {
         epochSize = 0
         minibatchSize = 2
-        maxEpochs = 1 # 15
+        maxEpochs = 15
         
         learningRatesPerSample = 0.00005
         momentumAsTimeConstant = 0*5:1024 # was: 0.9 per MB 
