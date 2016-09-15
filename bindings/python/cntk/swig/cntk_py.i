@@ -36,6 +36,8 @@
 %ignore CNTK::Internal::Scatter;
 %ignore CNTK::Internal::Slice;
 
+%ignore CNTK::Internal::IsReversingTensorShapesInErrorMessagesEnabled;
+
 %ignore CNTK::Variable::Owner;
 
 %{
