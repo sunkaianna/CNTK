@@ -344,6 +344,81 @@ void TestRecurrentFunctionCloning()
     CompareFunctions(clonedFunctionWithParametersShared, clonedFunctionWithParametersFrozen, ParameterCloningMethod::Freeze, cloningReplacements, visitedFunctions);
 }
 
+void TestTranspose(size_t numAxes, size_t axis1, size_t axis2, const DeviceDescriptor& device)
+{
+    srand(1);
+
+    size_t maxDimSize = 15;
+    NDShape inputShape(numAxes);
+    for (size_t i = 0; i < numAxes; ++i)
+        inputShape[i] = (rand() % maxDimSize) + 1;
+
+    auto inputVar = InputVariable(inputShape, DataType::Float, false, L"leftInput");
+    auto transposeFunc = TransposeAxes(inputVar, Axis(axis1), Axis(axis2));
+
+    std::vector<float> inputData(inputShape.TotalSize());
+    for (size_t i = 0; i < inputData.size(); ++i)
+        inputData[i] = ((float)rand()) / RAND_MAX;
+
+    auto inputValueShape = inputShape.AppendShape({ 1, 1 });
+    ValuePtr inputValue = MakeSharedObject<Value>(MakeSharedObject<NDArrayView>(inputValueShape, inputData, true));
+
+    NDShape outputShape = transposeFunc->Output().Shape();
+    NDShape outputValueShape = outputShape.AppendShape({ 1, 1 });
+    std::vector<float> outputData(outputValueShape.TotalSize());
+    ValuePtr outputValue = MakeSharedObject<Value>(MakeSharedObject<NDArrayView>(outputValueShape, outputData, false));
+
+    std::unordered_map<Variable, ValuePtr> outputs = { { transposeFunc->Output(), outputValue } };
+    transposeFunc->Forward({ { inputVar, inputValue } }, outputs, device);
+
+    auto getStridesFunc = [](const NDShape& shape) {
+        std::vector<size_t> strides(shape.Rank() - 1);
+        size_t totalSize = 1;
+        for (size_t i = 0; i < shape.Rank() - 1; ++i)
+        {
+            totalSize *= shape[i];
+            strides[i] = totalSize;
+        }
+
+        return strides;
+    };
+    std::vector<size_t> inputShapeStrides = getStridesFunc(inputShape);
+    std::vector<size_t> outputShapeStrides = getStridesFunc(outputShape);
+
+    auto unflattenedShapeFunc = [](size_t flatennedIdx, const std::vector<size_t>& strides) {
+        NDShape unflattenedShape(strides.size() + 1);
+        size_t remainder = flatennedIdx;
+        for (int i = (int)strides.size() - 1; i >= 0; --i)
+        {
+            unflattenedShape[i + 1] = remainder / strides[i];
+            remainder = remainder % strides[i];
+        }
+        unflattenedShape[0] = remainder;
+
+        return unflattenedShape;
+    };
+
+    auto flattenedIndexFunc = [](const NDShape& shape, const std::vector<size_t>& strides) {
+        size_t flattenedIdx = shape[0];
+        for (int i = 0; i < strides.size(); ++i)
+            flattenedIdx += shape[i + 1] * strides[i];
+
+        return flattenedIdx;
+    };
+
+    // Verify forward prop results
+    std::vector<float> expectedOutputValues(outputShape.TotalSize());
+    for (size_t i = 0; i < expectedOutputValues.size(); ++i)
+    {
+        auto unflattenedShape = unflattenedShapeFunc(i, outputShapeStrides);
+        std::swap(unflattenedShape[axis1], unflattenedShape[axis2]);
+        size_t flattenedIndex = flattenedIndexFunc(unflattenedShape, inputShapeStrides);
+        expectedOutputValues[i] = inputData[flattenedIndex];
+    }
+
+    FloatingPointVectorCompare(outputData, expectedOutputValues, "TestTimesAndPlus: Forward prop results do not match expected results");
+}
+
 void FunctionTests()
 {
     TestSlice(DeviceDescriptor::CPUDevice());
@@ -353,4 +428,7 @@ void FunctionTests()
     TestReduceSum(DeviceDescriptor::GPUDevice(0));
 
     TestRecurrentFunctionCloning();
+
+    TestTranspose(2, 0, 1, DeviceDescriptor::CPUDevice());
+    TestTranspose(3, 1, 2, DeviceDescriptor::GPUDevice(0));
 }

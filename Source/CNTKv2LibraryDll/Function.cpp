@@ -474,9 +474,8 @@ namespace CNTK
             if (!axis1.IsStaticAxis() || !axis2.IsStaticAxis())
                 LogicError("TransposeAxes operation currently does not support transposing dynamic axes");
 
-            auto transposedTensorShape = AsTensorShape(inputs[0].Shape());
-            transposedTensorShape.SwapDimsInPlace(axis1.StaticAxisIndex(), axis2.StaticAxisIndex());
-            outputShape = AsNDShape(transposedTensorShape);
+            outputShape = inputs[0].Shape();
+            std::swap(outputShape[axis1.StaticAxisIndex()], outputShape[axis2.StaticAxisIndex()]);
             break;
         }
         case PrimitiveOpType::Slice:
